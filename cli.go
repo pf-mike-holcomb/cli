@@ -62,10 +62,11 @@ func (cli *Cli) Run(args []string, showHelp bool) {
 			ExitWithMessage("No org specified.\nRun this command with --org or by setting HEROKU_ORGANIZATION")
 		}
 	}
+	ctx.APIToken = apiToken()
 	if ctx.Command.NeedsAuth {
 		ctx.APIToken = auth()
-		ctx.Auth.Password = ctx.APIToken
 	}
+	ctx.Auth.Password = ctx.APIToken
 	ctx.Cwd, _ = os.Getwd()
 	ctx.HerokuDir = AppDir()
 	ctx.Debug = debugging
@@ -205,9 +206,9 @@ func getNetrc() *netrc.Netrc {
 }
 
 func auth() (password string) {
+	interactiveLogin()
 	token := apiToken()
 	if token == "" {
-		interactiveLogin()
 		return auth()
 	}
 	return token

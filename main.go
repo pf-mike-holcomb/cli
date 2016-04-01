@@ -44,6 +44,7 @@ func init() {
 	cli.Topics = TopicSet{
 		authTopic,
 		commandsTopic,
+		completionsTopic,
 		debugTopic,
 		loginTopic,
 		logoutTopic,
@@ -60,6 +61,8 @@ func init() {
 		authLogoutCmd,
 		authTokenCmd,
 		commandsListCmd,
+		commandFlagsCmd,
+		completionsCmd,
 		debugErrlogCmd,
 		loginCmd,
 		logoutCmd,
