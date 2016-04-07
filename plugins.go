@@ -226,7 +226,10 @@ func runFn(plugin *Plugin, topic, command string) func(ctx *Context) {
 		var cmd = module.commands.filter(function (c) {
 			return c.topic === topic && c.command == command;
 		})[0];
-		cmd.run(ctx);`, plugin.Name, plugin.Version, topic, command, string(title), ctxJSON, strconv.Quote(ErrLogPath))
+
+		// check if es6 class or normal function
+		/^class\s/.test(Function.prototype.toString.call(cmd.run)) ? new cmd.run(ctx) : cmd.run(ctx);
+		`, plugin.Name, plugin.Version, topic, command, string(title), ctxJSON, strconv.Quote(ErrLogPath))
 
 		// swallow sigint since the plugin will handle it
 		swallowSignal(os.Interrupt)
