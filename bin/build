@@ -1,0 +1,107 @@
+#!/usr/bin/env node
+
+'use strict';
+
+let childProcess = require('child_process');
+let https        = require('https');
+let fs           = require('mz/fs');
+let config       = require('../config.json');
+let lzma         = require('lzma-native');
+let tar          = require('tar');
+let path         = require('path');
+
+let version;
+// TODO: look up channel
+let channel = 'dev';
+let revision;
+let npmPath = './dist/npm.tar';
+
+let mkdirp = dir => new Promise((ok, fail) => require('mkdirp')(dir, err => err ? fail(err) : ok()));
+
+let httpGet = url => {
+  console.log(`HTTP GET ${url}`);
+  return new Promise((ok, fail) => {
+    https.get(url, res => {
+      if (res.statusCode >= 300 && res.statusCode <= 399) return ok(httpGet(res.headers.location));
+      if (res.statusCode <= 199 || res.statusCode >= 400) return fail(new Error(`${res.statusCode}:${url}`));
+      ok(res);
+    });
+  });
+};
+
+let download = (url, file) => {
+  return mkdirp(path.dirname(file))
+  .then(() => httpGet(url))
+  .then(res => new Promise((ok, fail) => {
+    console.log(`saving to ${file}`);
+    res.pipe(fs.createWriteStream(file)
+             .on('error', fail)
+             .on('close', ok));
+  }));
+};
+
+let downloadXZ = (url, file) => {
+  return mkdirp(path.dirname(file))
+  .then(() => httpGet(url))
+  .then(res => new Promise((ok, fail) => {
+    console.log(`xz decompressing to ${file}`);
+    res.pipe(lzma.createDecompressor().on('error', fail))
+    .pipe(fs.createWriteStream(file)
+             .on('error', fail)
+             .on('close', ok));
+  }));
+};
+
+let extractTar = (from, to) => {
+  console.log(`extracting ${from} to ${to}`);
+  return new Promise((ok, fail) => {
+    let extractor = tar.Extract({path: to}).on('error', fail).on('end', ok);
+    fs.createReadStream(from).pipe(extractor);
+  });
+};
+
+let exec = (cmd, opts) => {
+  return new Promise((ok, fail) => {
+    opts = Object.assign({}, opts);
+    opts.env = Object.assign({}, process.env, opts.env);
+    childProcess.exec(cmd, opts, (error, stdout, stderr) => {
+      if (error) return fail(error);
+      ok([stdout, stderr]);
+    });
+  });
+};
+
+let spawn = (cmd, args, opts) => {
+  return new Promise((ok, fail) => {
+    console.log(`> ${cmd} ${args.join(' ')}`);
+    opts = Object.assign({stdio: 'inherit'}, opts);
+    opts.env = Object.assign({}, process.env, opts.env);
+    childProcess.spawn(cmd, args, opts)
+    .on('error', fail)
+    .on('close', code => code === 0 ? ok() : fail(`${cmd} ${args.join(' ')} exit code: ${code}`));
+  });
+};
+
+let build = (os, arch) => {
+  let binPath = `./dist/heroku-${os}-${arch}/heroku-cli`;
+  let nodePath = `./dist/heroku-${os}-${arch}/node-${config.nodeVersion}-${os}-${arch}`;
+  let ldflags = `-X=main.Version=${version} -X=main.Channel=${channel} -X=main.GitSHA=${revision}`;
+  let args = ['build', '-o', binPath, '-ldflags', ldflags];
+  let env = {GOOS: os, GOARCH: arch};
+  return spawn('go', args, env)
+  .then(() => downloadXZ(`https://cli-assets.heroku.com/node/v${config.nodeVersion}/node-${config.nodeVersion}-darwin-amd64.xz`, nodePath))
+  .then(() => fs.chmod(nodePath, 0o755))
+  .then(() => extractTar(npmPath, `./dist/heroku-${os}-${arch}`));
+};
+
+process.on('unhandledRejection', err => console.error(err));
+
+exec(__dirname+'/version')
+.then(v  => version = v[0].trim())
+.then(() => exec('git log -n 1 --pretty=format:"%H"'))
+.then(r  => revision = r)
+// TODO: validate sha
+.then(() => downloadXZ(`https://cli-assets.heroku.com/npm/v${config.npmVersion}.tar.xz`, npmPath))
+.then(() => build('darwin', 'amd64'))
+.then(() => console.log('done'))
+.catch(err => {console.error(err.stack); process.exit(1);});

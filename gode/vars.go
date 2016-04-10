@@ -46,8 +46,8 @@ func SetRootPath(root string) {
 				panic(err)
 			}
 		} else {
-			nodeBinPath = filepath.Join(rootPath, "node-"+NodeVersion+"-"+runtime.GOOS+"-"+runtime.GOARCH, "node")
-			if runtime.GOOS == "windows" {
+			nodeBinPath = filepath.Join(rootPath, "node-"+NodeVersion+"-"+t.OS+"-"+t.Arch)
+			if t.OS == "windows" {
 				nodeBinPath += ".exe"
 			}
 		}
