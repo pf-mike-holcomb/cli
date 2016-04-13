@@ -6,7 +6,6 @@ let childProcess = require('child_process');
 let https        = require('https');
 let fs           = require('mz/fs');
 let config       = require('../config.json');
-let lzma         = require('lzma-native');
 let tar          = require('tar');
 let path         = require('path');
 let fstream      = require('fstream');
@@ -20,7 +19,7 @@ const os = 'darwin';
 const arch = 'amd64';
 const dir = `./dist/heroku-${os}-${arch}`;
 const binPath = `${dir}/heroku-cli`;
-const nodePath = `${dir}/node-${config.nodeVersion}-${os}-${arch}`;
+const nodePath = `${dir}/node`;
 const ldflags = `-X=main.Version=${version} -X=main.Channel=${channel} -X=main.GitSHA=${revision}`;
 const npmPath = './dist/npm.tar.gz';
 
@@ -50,20 +49,8 @@ let download = (url, file) => {
   }));
 };
 
-let downloadXZ = (url, file) => {
-  return mkdirp(path.dirname(file))
-  .then(() => httpGet(url))
-  .then(res => new Promise((ok, fail) => {
-    console.log(`xz decompressing to ${file}`);
-    res.pipe(lzma.createDecompressor().on('error', fail))
-    .pipe(fs.createWriteStream(file)
-             .on('error', fail)
-             .on('close', ok));
-  }));
-};
-
 let extractTarGZ = (from, to) => {
-  console.log(`extracting ${from} to ${to}`);
+  console.log(`extracting to ${to}`);
   return new Promise((ok, fail) => {
     let extractor = tar.Extract({path: to}).on('error', fail).on('end', ok);
     from = typeof from === 'string' ? fs.createReadStream(from) : from;
@@ -82,17 +69,6 @@ let tarDirectory = (dir, file) => {
   });
 };
 
-let exec = (cmd, opts) => {
-  return new Promise((ok, fail) => {
-    opts = Object.assign({}, opts);
-    opts.env = Object.assign({}, process.env, opts.env);
-    childProcess.exec(cmd, opts, (error, stdout, stderr) => {
-      if (error) return fail(error);
-      ok([stdout, stderr]);
-    });
-  });
-};
-
 let spawn = (cmd, args, opts) => {
   return new Promise((ok, fail) => {
     console.log(`> ${cmd} ${args.join(' ')}`);
@@ -104,11 +80,26 @@ let spawn = (cmd, args, opts) => {
   });
 };
 
-let downloadNode = (os, arch, file) => {
-  let base = `v${config.nodeVersion}-darwin-x64`;
+let downloadNpm = file => {
+  fs.exists(dir)
+  .then(exists => exists ? null : download(`https://github.com/npm/npm/archive/v${config.npmVersion}.tar.gz`, file));
+};
+
+let downloadNode = file => {
+  let base = `node-v${config.nodeVersion}-darwin-x64`;
   let archive = `${base}.tar.gz`;
-  return httpGet(`https://nodejs.org/download/release/${archive}`)
-  .then(res => extractTarGZ(res, `./tmp`));
+  return fs.exists(`./dist/${base}/bin/node`)
+  .then(exists => {
+    console.log(exists);
+    if (exists) {
+      return ncp(`./dist/${base}/bin/node`, file);
+    } else {
+      return httpGet(`https://nodejs.org/download/release/v${config.nodeVersion}/${archive}`)
+      .then(res => extractTarGZ(res, './dist'))
+      .then(() => fs.chmod(`./dist/${base}/bin/node`, 0o755))
+      .then(() => fs.rename(`./dist/${base}/bin/node`, file));
+    }
+  });
 };
 
 let installPlugins = () => {
@@ -120,10 +111,10 @@ let installPlugins = () => {
 process.on('unhandledRejection', err => console.error(err));
 
 spawn('go', ['build', '-o', binPath, '-ldflags', ldflags], {GOOS: os, GOARCH: arch})
-.then(() => downloadNode(os, arch, nodePath))
-.then(() => fs.chmod(nodePath, 0o755))
-.then(() => extractTarGZ(npmPath, dir))
+.then(() => downloadNode(nodePath))
+.then(() => downloadNpm(npmPath))
 .then(() => download(`https://github.com/npm/npm/archive/v${config.npmVersion}.tar.gz`, npmPath))
+.then(() => extractTarGZ(npmPath, dir))
 .then(() => installPlugins())
 .then(() => ncp(`./dist/node_modules`, `${dir}/node_modules`))
 .then(() => tarDirectory(dir, `${dir}.tar`))

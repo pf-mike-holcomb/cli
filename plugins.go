@@ -28,13 +28,6 @@ type Plugin struct {
 // SetupNode sets up node and npm in ~/.heroku
 func SetupNode() {
 	gode.SetRootPath(filepath.Dir(binPath))
-	setup, err := gode.IsSetup()
-	WarnIfError(err)
-	if !setup {
-		if err := gode.Setup(); err != nil {
-			panic(err)
-		}
-	}
 }
 
 // LoadPlugins loads the topics and commands from the JavaScript plugins into the CLI
@@ -234,7 +227,7 @@ cmd.run(ctx);
 
 		currentAnalyticsCommand.Plugin = plugin.Name
 		currentAnalyticsCommand.Version = plugin.Version
-		currentAnalyticsCommand.Language = fmt.Sprintf("node/%s", gode.NodeVersion)
+		currentAnalyticsCommand.Language = fmt.Sprintf("node/?")
 
 		cmd, done := gode.RunScript(script)
 		defer done()

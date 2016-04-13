@@ -7,7 +7,6 @@ import (
 )
 
 func TestPackages(t *testing.T) {
-	setup()
 	must(os.RemoveAll(filepath.Join(rootPath, "node_modules")))
 	must(InstallPackages("request"))
 	packages, err := Packages()
@@ -21,7 +20,6 @@ func TestPackages(t *testing.T) {
 }
 
 func TestRemovePackage(t *testing.T) {
-	setup()
 	must(os.RemoveAll(filepath.Join(rootPath, "node_modules")))
 	must(InstallPackages("request"))
 	packages, err := Packages()
@@ -38,7 +36,6 @@ func TestRemovePackage(t *testing.T) {
 }
 
 func TestRemoveNotInstalledPackage(t *testing.T) {
-	setup()
 	must(os.RemoveAll(filepath.Join(rootPath, "node_modules")))
 	must(InstallPackages("request"))
 	packages, err := Packages()
@@ -55,7 +52,6 @@ func TestRemoveNotInstalledPackage(t *testing.T) {
 }
 
 func TestOutdatedPackages(t *testing.T) {
-	setup()
 	must(InstallPackages("heroku-cli-util@1.0.0"))
 	packages, err := OutdatedPackages("heroku-cli-util")
 	must(err)
@@ -65,7 +61,6 @@ func TestOutdatedPackages(t *testing.T) {
 }
 
 func TestPackagesGithubPackage(t *testing.T) {
-	setup()
 	must(os.RemoveAll(filepath.Join(rootPath, "node_modules")))
 	must(InstallPackages("dickeyxxx/heroku-production-check"))
 	packages, err := Packages()
@@ -76,4 +71,10 @@ func TestPackagesGithubPackage(t *testing.T) {
 		}
 	}
 	t.Fatalf("package did not install")
+}
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
 }

@@ -10,13 +10,10 @@ import (
 	"runtime"
 )
 
-var t *target
 var registry string
 var rootPath string
-var lockPath string
 var modulesDir string
 var nodeBinPath string
-var npmBasePath string
 var npmBinPath string
 
 func init() {
@@ -28,30 +25,21 @@ func init() {
 
 // SetRootPath sets the root for gode
 func SetRootPath(root string) {
-	for _, target := range targets {
-		if runtime.GOARCH == target.Arch && runtime.GOOS == target.OS {
-			t = &target
-			break
-		}
-	}
 	rootPath = root
-	lockPath = filepath.Join(rootPath, "node.lock")
 	modulesDir = filepath.Join(rootPath, "node_modules")
 	nodeBinPath = os.Getenv("HEROKU_NODE_PATH")
 	if nodeBinPath == "" {
-		if t == nil {
+		nodeBinPath = filepath.Join(rootPath, "node")
+		if runtime.GOOS == "windows" {
+			nodeBinPath += ".exe"
+		}
+		if exists, _ := fileExists(nodeBinPath); !exists {
 			var err error
 			nodeBinPath, err = exec.LookPath("node")
 			if err != nil {
 				panic(err)
 			}
-		} else {
-			nodeBinPath = filepath.Join(rootPath, "node-"+NodeVersion+"-"+t.OS+"-"+t.Arch)
-			if t.OS == "windows" {
-				nodeBinPath += ".exe"
-			}
 		}
 	}
-	npmBasePath = filepath.Join(rootPath, npmBase)
-	npmBinPath = filepath.Join(npmBasePath, "cli.js")
+	npmBinPath = filepath.Join(rootPath, "npm", "cli.js")
 }
