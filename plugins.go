@@ -157,7 +157,6 @@ Example:
   $ heroku plugins`,
 
 	Run: func(ctx *Context) {
-		SetupBuiltinPlugins()
 		var plugins []string
 		for _, plugin := range GetPlugins() {
 			symlinked := ""
@@ -356,23 +355,6 @@ func isPluginSymlinked(plugin string) bool {
 		return false
 	}
 	return fi.Mode()&os.ModeSymlink != 0
-}
-
-// SetupBuiltinPlugins ensures all the builtinPlugins are installed
-func SetupBuiltinPlugins() {
-	pluginNames := difference(BuiltinPlugins, PluginNames())
-	if len(pluginNames) == 0 {
-		return
-	}
-	action("heroku-cli: Installing core plugins", "done", func() {
-		if err := installPlugins(pluginNames...); err != nil {
-			// retry once
-			WarnIfError(gode.RemovePackages(pluginNames...))
-			WarnIfError(gode.ClearCache())
-			Err("\rheroku-cli: Installing core plugins (retrying)...")
-			ExitIfError(installPlugins(pluginNames...))
-		}
-	})
 }
 
 func difference(a, b []string) []string {

@@ -26,20 +26,6 @@ var Channel = "?"
 
 var cli = &Cli{}
 
-// BuiltinPlugins are the core plugins that will be autoinstalled
-var BuiltinPlugins = []string{
-	"heroku-apps",
-	"heroku-cli-addons",
-	"heroku-fork",
-	"heroku-git",
-	"heroku-local",
-	"heroku-orgs",
-	"heroku-pipelines",
-	"heroku-run",
-	"heroku-spaces",
-	"heroku-status",
-}
-
 func init() {
 	cli.Topics = TopicSet{
 		authTopic,
@@ -102,7 +88,6 @@ func main() {
 	cli.Run(os.Args, false)
 
 	// Command wasn't found so load the plugins and try again
-	SetupBuiltinPlugins()
 	TriggerBackgroundUpdate()
 	cli.LoadPlugins(GetPlugins())
 	cli.Run(os.Args, true)

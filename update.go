@@ -63,7 +63,6 @@ func Update(channel string, t string) {
 	SubmitAnalytics()
 	updateCLI(channel)
 	SetupNode()
-	SetupBuiltinPlugins()
 	updatePlugins()
 	truncateErrorLog()
 	cleanTmpDir()
