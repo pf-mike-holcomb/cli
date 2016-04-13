@@ -1,4 +1,7 @@
 {
   "nodeVersion": "5.10.1",
-  "npmVersion": "3.8.5"
+  "npmVersion": "3.8.5",
+  "plugins": {
+    "heroku-apps": "*"
+  }
 }

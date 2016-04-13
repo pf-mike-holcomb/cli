@@ -9,14 +9,24 @@ let config       = require('../config.json');
 let lzma         = require('lzma-native');
 let tar          = require('tar');
 let path         = require('path');
+let fstream      = require('fstream');
+let zlib         = require('zlib');
 
-let version;
+const version = childProcess.execSync(__dirname+'/version', {encoding: 'utf8'}).trim();
 // TODO: look up channel
-let channel = 'dev';
-let revision;
-let npmPath = './dist/npm.tar';
+const channel = 'dev';
+const revision = childProcess.execSync('git log -n 1 --pretty=format:"%H"');
+const os = 'darwin';
+const arch = 'amd64';
+const dir = `./dist/heroku-${os}-${arch}`;
+const binPath = `${dir}/heroku-cli`;
+const nodePath = `${dir}/node-${config.nodeVersion}-${os}-${arch}`;
+const ldflags = `-X=main.Version=${version} -X=main.Channel=${channel} -X=main.GitSHA=${revision}`;
+const npmPath = './dist/npm.tar.gz';
 
 let mkdirp = dir => new Promise((ok, fail) => require('mkdirp')(dir, err => err ? fail(err) : ok()));
+let rimraf = dir => new Promise((ok, fail) => require('rimraf')(dir, err => err ? fail(err) : ok()));
+let ncp = (s, d) => new Promise((ok, fail) => require('ncp')(s, d, err => err ? fail(err) : ok()));
 
 let httpGet = url => {
   console.log(`HTTP GET ${url}`);
@@ -52,11 +62,23 @@ let downloadXZ = (url, file) => {
   }));
 };
 
-let extractTar = (from, to) => {
+let extractTarGZ = (from, to) => {
   console.log(`extracting ${from} to ${to}`);
   return new Promise((ok, fail) => {
     let extractor = tar.Extract({path: to}).on('error', fail).on('end', ok);
-    fs.createReadStream(from).pipe(extractor);
+    from = typeof from === 'string' ? fs.createReadStream(from) : from;
+    from.pipe(zlib.createGunzip()).pipe(extractor);
+  });
+};
+
+let tarDirectory = (dir, file) => {
+  console.log(`tarring ${dir} to ${file}`);
+  return new Promise((ok, fail) => {
+    let packer = tar.Pack().on('error', fail).on('end', ok);
+    fstream.Reader({path: dir, type: 'Directory'})
+    .on('error', fail)
+    .pipe(packer)
+    .pipe(fs.createWriteStream(file).on('error', fail).on('end', ok));
   });
 };
 
@@ -82,26 +104,30 @@ let spawn = (cmd, args, opts) => {
   });
 };
 
-let build = (os, arch) => {
-  let binPath = `./dist/heroku-${os}-${arch}/heroku-cli`;
-  let nodePath = `./dist/heroku-${os}-${arch}/node-${config.nodeVersion}-${os}-${arch}`;
-  let ldflags = `-X=main.Version=${version} -X=main.Channel=${channel} -X=main.GitSHA=${revision}`;
-  let args = ['build', '-o', binPath, '-ldflags', ldflags];
-  let env = {GOOS: os, GOARCH: arch};
-  return spawn('go', args, env)
-  .then(() => downloadXZ(`https://cli-assets.heroku.com/node/v${config.nodeVersion}/node-${config.nodeVersion}-darwin-amd64.xz`, nodePath))
-  .then(() => fs.chmod(nodePath, 0o755))
-  .then(() => extractTar(npmPath, `./dist/heroku-${os}-${arch}`));
+let downloadNode = (os, arch, file) => {
+  let base = `v${config.nodeVersion}-darwin-x64`;
+  let archive = `${base}.tar.gz`;
+  return httpGet(`https://nodejs.org/download/release/${archive}`)
+  .then(res => extractTarGZ(res, `./tmp`));
+};
+
+let installPlugins = () => {
+  let plugins = Object.keys(config.plugins).map(p => `${p}@${config.plugins[p]}`);
+  return mkdirp('./dist/node_modules')
+  .then(() => spawn('npm', ['install'].concat(plugins), {cwd: './dist/'}));
 };
 
 process.on('unhandledRejection', err => console.error(err));
 
-exec(__dirname+'/version')
-.then(v  => version = v[0].trim())
-.then(() => exec('git log -n 1 --pretty=format:"%H"'))
-.then(r  => revision = r)
-// TODO: validate sha
-.then(() => downloadXZ(`https://cli-assets.heroku.com/npm/v${config.npmVersion}.tar.xz`, npmPath))
-.then(() => build('darwin', 'amd64'))
+spawn('go', ['build', '-o', binPath, '-ldflags', ldflags], {GOOS: os, GOARCH: arch})
+.then(() => downloadNode(os, arch, nodePath))
+.then(() => fs.chmod(nodePath, 0o755))
+.then(() => extractTarGZ(npmPath, dir))
+.then(() => download(`https://github.com/npm/npm/archive/v${config.npmVersion}.tar.gz`, npmPath))
+.then(() => installPlugins())
+.then(() => ncp(`./dist/node_modules`, `${dir}/node_modules`))
+.then(() => tarDirectory(dir, `${dir}.tar`))
+.then(() => rimraf(dir))
+.then(() => rimraf('./dist/node_modules'))
 .then(() => console.log('done'))
-.catch(err => {console.error(err.stack); process.exit(1);});
+.catch(err => {console.error(err.stack || err); process.exit(1);});
