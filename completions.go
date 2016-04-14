@@ -41,7 +41,7 @@ var completionsCmd = &Command{
 			switch prev {
 			case "--app":
 				apps, err := apps()
-				ExitIfError(err, false)
+				ExitIfError(err)
 				for _, app := range apps {
 					opts = append(opts, app.Name)
 				}
