@@ -7,7 +7,13 @@ import (
 	"path/filepath"
 )
 
-var pluginCachePath = filepath.Join(AppDir(), "plugin-cache.json")
+var pluginCachePath = os.Getenv("HEROKU_PLUGIN_CACHE")
+
+func init() {
+	if pluginCachePath == "" {
+		pluginCachePath = filepath.Join(AppDir(), "plugin-cache.json")
+	}
+}
 
 // AddPluginsToCache adds/updates a set of plugins to ~/.heroku/plugin-cache.json
 func AddPluginsToCache(plugins ...*Plugin) {

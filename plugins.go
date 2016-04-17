@@ -30,6 +30,8 @@ func SetupNode() {
 	gode.SetRootPath(filepath.Dir(binPath))
 }
 
+var corePath = filepath.Join(filepath.Dir(binPath), "core")
+
 // LoadPlugins loads the topics and commands from the JavaScript plugins into the CLI
 func (cli *Cli) LoadPlugins(plugins map[string]*Plugin) {
 	for _, plugin := range plugins {
@@ -55,24 +57,25 @@ var pluginsTopic = &Topic{
 }
 
 var pluginsInstallCmd = &Command{
-	Topic:       "plugins",
-	Command:     "install",
-	Hidden:      true,
-	Args:        []Arg{{Name: "name"}},
-	Description: "Installs a plugin into the CLI",
+	Topic:        "plugins",
+	Command:      "install",
+	Hidden:       true,
+	VariableArgs: true,
+	Args:         []Arg{{Name: "name"}},
+	Description:  "Installs a plugin into the CLI",
 	Help: `Install a Heroku plugin
 
   Example:
   $ heroku plugins:install dickeyxxx/heroku-production-status`,
 
 	Run: func(ctx *Context) {
-		name := ctx.Args.(map[string]string)["name"]
-		if len(name) == 0 {
+		plugins := ctx.Args.([]string)
+		if len(plugins) == 0 {
 			Errln("Must specify a plugin name")
 			return
 		}
-		action("Installing plugin "+name, "done", func() {
-			ExitIfError(installPlugins(name))
+		action("Installing "+plural("plugin", len(plugins))+" "+strings.Join(plugins, " "), "done", func() {
+			ExitIfError(installPlugins(plugins...))
 		})
 	},
 }

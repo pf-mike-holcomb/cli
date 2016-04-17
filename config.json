@@ -1,9 +1,14 @@
 {
   "nodeVersion": "5.10.1",
   "npmVersion": "3.8.5",
-  "plugins": {
-    "heroku-apps": "*",
-    "heroku-run": "*",
-    "heroku-cli-addons": "*"
+  "pjson": {
+    "name": "heroku-cli",
+    "description": "Heroku CLI modules",
+    "private": true,
+    "dependencies": {
+      "heroku-apps": "*",
+      "heroku-run": "*",
+      "heroku-cli-addons": "*"
+    }
   }
 }

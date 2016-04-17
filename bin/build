@@ -10,6 +10,7 @@ let tar          = require('tar');
 let path         = require('path');
 let fstream      = require('fstream');
 let zlib         = require('zlib');
+let lzma         = require('lzma-native');
 
 const version = childProcess.execSync(__dirname+'/version', {encoding: 'utf8'}).trim();
 // TODO: look up channel
@@ -65,6 +66,7 @@ let tarDirectory = (dir, file) => {
     fstream.Reader({path: dir, type: 'Directory'})
     .on('error', fail)
     .pipe(packer)
+    .pipe(lzma.createCompressor())
     .pipe(fs.createWriteStream(file).on('error', fail).on('end', ok));
   });
 };
@@ -80,44 +82,48 @@ let spawn = (cmd, args, opts) => {
   });
 };
 
-let downloadNpm = file => {
-  fs.exists(dir)
-  .then(exists => exists ? null : download(`https://github.com/npm/npm/archive/v${config.npmVersion}.tar.gz`, file));
+let downloadNpm = () => {
+  return fs.exists(npmPath)
+  .then(exists => exists ? null : download(`https://github.com/npm/npm/archive/v${config.npmVersion}.tar.gz`, npmPath));
 };
 
-let downloadNode = file => {
+let downloadNode = () => {
   let base = `node-v${config.nodeVersion}-darwin-x64`;
   let archive = `${base}.tar.gz`;
   return fs.exists(`./dist/${base}/bin/node`)
   .then(exists => {
-    console.log(exists);
     if (exists) {
-      return ncp(`./dist/${base}/bin/node`, file);
+      return ncp(`./dist/${base}/bin/node`, nodePath);
     } else {
       return httpGet(`https://nodejs.org/download/release/v${config.nodeVersion}/${archive}`)
       .then(res => extractTarGZ(res, './dist'))
       .then(() => fs.chmod(`./dist/${base}/bin/node`, 0o755))
-      .then(() => fs.rename(`./dist/${base}/bin/node`, file));
+      .then(() => ncp(`./dist/${base}/bin/node`, nodePath));
     }
   });
 };
 
 let installPlugins = () => {
-  let plugins = Object.keys(config.plugins).map(p => `${p}@${config.plugins[p]}`);
-  return mkdirp('./dist/node_modules')
-  .then(() => spawn('npm', ['install'].concat(plugins), {cwd: './dist/'}));
+  let plugins = Object.keys(config.pjson.dependencies).map(d => `${d}@${config.pjson.dependencies[d]}`);
+  return mkdirp(`./dist/core/node_modules`)
+  .then(() => fs.writeFile(`./dist/core/package.json`, JSON.stringify(config.pjson), 'utf8'))
+  .then(() => spawn('./dist/heroku', ['plugins:install'].concat(plugins)))
+  .then(() => spawn('npm', ['prune']))
+  .then(() => spawn('npm', ['dedupe']));
 };
 
 process.on('unhandledRejection', err => console.error(err));
+process.on('uncaughtException', err => console.error(err));
 
-spawn('go', ['build', '-o', binPath, '-ldflags', ldflags], {GOOS: os, GOARCH: arch})
-.then(() => downloadNode(nodePath))
-.then(() => downloadNpm(npmPath))
-.then(() => download(`https://github.com/npm/npm/archive/v${config.npmVersion}.tar.gz`, npmPath))
+spawn('go', ['build', '-o', './dist/heroku'])
+.then(() => spawn('go', ['build', '-o', binPath, '-ldflags', ldflags], {GOOS: os, GOARCH: arch}))
+.then(() => downloadNode())
+.then(() => downloadNpm())
 .then(() => extractTarGZ(npmPath, dir))
 .then(() => installPlugins())
-.then(() => ncp(`./dist/node_modules`, `${dir}/node_modules`))
-.then(() => tarDirectory(dir, `${dir}.tar`))
+.then(() => mkdirp(`${dir}/core`))
+.then(() => ncp(`./dist/core/node_modules`, `${dir}/core/node_modules`))
+.then(() => tarDirectory(dir, `${dir}.tar.xz`))
 .then(() => rimraf(dir))
 .then(() => rimraf('./dist/node_modules'))
 .then(() => console.log('done'))
