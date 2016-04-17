@@ -24,7 +24,8 @@ exports.download = () => {
         .on('entry', entry => {
           if (entry.props.path === `${base}/bin/node`) {
             mkdirp.sync(path.dirname(file));
-            entry.pipe(fs.createWriteStream(file).on('error', fail).on('end', ok));
+            entry.pipe(fs.createWriteStream(file).on('error', fail));
+            entry.on('end', ok);
           }
         })
         .on('error', fail);
