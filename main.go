@@ -32,6 +32,10 @@ type Build struct {
 var DataHome = dataHome()
 var HomeDir = homeDir()
 
+func init() {
+	goreq.SetConnectTimeout(15 * time.Second)
+}
+
 func main() {
 	loadNewCLI()
 	update()
@@ -120,6 +124,10 @@ func update() {
 	tmp := tmpDir(DataHome)
 	must(extractTar(reader, tmp))
 	must(os.Rename(filepath.Join(tmp, "heroku"), filepath.Join(DataHome, "cli")))
+	//os.MkdirAll(filepath.Join(DataHome, "plugins"), 0755)
+	//os.Rename(filepath.Join(legacyDir(), "node_modules"), filepath.Join(DataHome, "plugins", "node_modules"))
+	os.MkdirAll(filepath.Join(configHome()), 0755)
+	os.Rename(filepath.Join(legacyDir(), "config.json"), filepath.Join(configHome(), "config.json"))
 	log.Println("done")
 }
 
@@ -173,4 +181,26 @@ func tmpDir(base string) string {
 		panic(err)
 	}
 	return dir
+}
+
+func legacyDir() string {
+	if runtime.GOOS == "windows" {
+		dir := os.Getenv("LOCALAPPDATA")
+		if dir != "" {
+			return filepath.Join(dir, "heroku")
+		}
+	}
+	dir := os.Getenv("XDG_DATA_HOME")
+	if dir != "" {
+		return filepath.Join(dir, "heroku")
+	}
+	return filepath.Join(HomeDir, ".heroku")
+}
+
+func configHome() string {
+	d := os.Getenv("XDG_CONFIG_HOME")
+	if d == "" {
+		d = filepath.Join(HomeDir, ".config")
+	}
+	return filepath.Join(d, "heroku")
 }
