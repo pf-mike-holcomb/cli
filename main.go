@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -70,21 +71,23 @@ func dataHome() string {
 	return filepath.Join(d, "heroku")
 }
 
+func newCLIPath() string {
+	return filepath.Join(DataHome, "cli", "bin", "heroku")
+}
+
 func loadNewCLI() {
-	bin := filepath.Join(DataHome, "cli", "bin", "heroku")
-	if exists, _ := fileExists(bin); !exists {
+	if exists, _ := fileExists(newCLIPath()); !exists {
 		return
 	}
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command(bin, os.Args...)
+		cmd := exec.Command(newCLIPath(), os.Args...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			os.Exit(getExitCode(err))
-		}
+		err := cmd.Run()
+		os.Exit(getExitCode(err))
 	} else {
-		if err := syscall.Exec(bin, os.Args, os.Environ()); err != nil {
+		if err := syscall.Exec(newCLIPath(), os.Args, os.Environ()); err != nil {
 			panic(err)
 		}
 	}
@@ -116,19 +119,83 @@ func getExitCode(err error) int {
 }
 
 func update() {
-	log.Println("Updating CLI...")
+	os.Stderr.WriteString("heroku-cli: Updating CLI...")
 	manifest := getUpdateManifest("dev")
+	os.Stderr.WriteString(fmt.Sprintf("\rheroku-cli: Updating CLI to %s...", manifest.Version))
 	build := manifest.Builds[runtime.GOOS+"-"+runtime.GOARCH]
 	reader, err := downloadXZ(build.URL)
 	must(err)
 	tmp := tmpDir(DataHome)
 	must(extractTar(reader, tmp))
+	os.RemoveAll(filepath.Join(DataHome, "cli"))
 	must(os.Rename(filepath.Join(tmp, "heroku"), filepath.Join(DataHome, "cli")))
-	//os.MkdirAll(filepath.Join(DataHome, "plugins"), 0755)
-	//os.Rename(filepath.Join(legacyDir(), "node_modules"), filepath.Join(DataHome, "plugins", "node_modules"))
+	os.Stderr.WriteString(" done\n")
+
+	copyconfig()
+	copyplugins()
+}
+
+func copyconfig() {
 	os.MkdirAll(filepath.Join(configHome()), 0755)
-	os.Rename(filepath.Join(legacyDir(), "config.json"), filepath.Join(configHome(), "config.json"))
-	log.Println("done")
+	os.Rename(filepath.Join(legacyhome(), "config.json"), filepath.Join(configHome(), "config.json"))
+}
+
+var coreplugins = []string{
+	"heroku-apps",
+	"heroku-cli-addons",
+	"heroku-fork",
+	"heroku-git",
+	"heroku-local",
+	"heroku-orgs",
+	"heroku-pipelines",
+	"heroku-run",
+	"heroku-spaces",
+	"heroku-status",
+}
+
+func include(arr []string, i string) bool {
+	for _, j := range arr {
+		if i == j {
+			return true
+		}
+	}
+	return false
+}
+
+func copyplugins() {
+	plugins, err := readJSON(filepath.Join(legacyhome(), "plugin-cache.json"))
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	tocopy := []string{}
+	for name, plugin := range plugins {
+		if include(coreplugins, name) {
+			continue
+		}
+		commands, ok := plugin.(map[string]interface{})["commands"].([]interface{})
+		if !ok {
+			continue
+		}
+		if len(commands) != 0 {
+			tocopy = append(tocopy, name)
+		}
+	}
+
+	if len(tocopy) == 0 {
+		return
+	}
+
+	os.Stderr.WriteString("heroku-cli: updating plugins...\n")
+	for _, plugin := range tocopy {
+		cmd := exec.Command(newCLIPath(), "plugins:install", plugin)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			os.Exit(getExitCode(err))
+		}
+	}
 }
 
 func must(err error) {
@@ -139,7 +206,7 @@ func must(err error) {
 
 func getUpdateManifest(channel string) *Manifest {
 	res, err := goreq.Request{
-		Uri:     "https://cli-assets.heroku.com/" + channel + "/manifest.json",
+		Uri:     "https://cli-assets.heroku.com/branches/" + channel + "/manifest.json",
 		Timeout: 30 * time.Minute,
 	}.Do()
 	must(err)
@@ -183,7 +250,7 @@ func tmpDir(base string) string {
 	return dir
 }
 
-func legacyDir() string {
+func legacyhome() string {
 	if runtime.GOOS == "windows" {
 		dir := os.Getenv("LOCALAPPDATA")
 		if dir != "" {
@@ -203,4 +270,19 @@ func configHome() string {
 		d = filepath.Join(HomeDir, ".config")
 	}
 	return filepath.Join(d, "heroku")
+}
+
+func readJSON(path string) (out map[string]interface{}, err error) {
+	if exists, err := fileExists(path); !exists {
+		if err != nil {
+			panic(err)
+		}
+		return map[string]interface{}{}, nil
+	}
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(data, &out)
+	return out, err
 }
