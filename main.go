@@ -120,7 +120,7 @@ func getExitCode(err error) int {
 
 func update() {
 	os.Stderr.WriteString("heroku-cli: Updating CLI...")
-	manifest := getUpdateManifest("dev")
+	manifest := getUpdateManifest("stable")
 	os.Stderr.WriteString(fmt.Sprintf("\rheroku-cli: Updating to %s...", manifest.Version))
 	build := manifest.Builds[runtime.GOOS+"-"+runtime.GOARCH]
 	reader, err := downloadXZ(build.URL)
