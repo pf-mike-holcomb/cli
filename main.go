@@ -72,7 +72,11 @@ func dataHome() string {
 }
 
 func newCLIPath() string {
-	return filepath.Join(DataHome, "cli", "bin", "heroku")
+	path := filepath.Join(DataHome, "cli", "bin", "heroku")
+	if runtime.GOOS == "windows" {
+		path = path + ".exe"
+	}
+	return path
 }
 
 func loadNewCLI() {
