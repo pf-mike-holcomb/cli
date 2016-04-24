@@ -1,0 +1,7 @@
+---
+dependencies:
+  override:
+    - echo 1
+test:
+  override:
+    - echo 1
