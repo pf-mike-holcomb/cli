@@ -72,7 +72,7 @@ func loadNewCLI() {
 		return
 	}
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command(bin, os.Args[1:]...)
+		cmd := exec.Command(bin, os.Args...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -80,7 +80,7 @@ func loadNewCLI() {
 			os.Exit(getExitCode(err))
 		}
 	} else {
-		if err := syscall.Exec(bin, os.Args[1:], os.Environ()); err != nil {
+		if err := syscall.Exec(bin, os.Args, os.Environ()); err != nil {
 			panic(err)
 		}
 	}
