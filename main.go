@@ -124,7 +124,6 @@ func update() {
 	}
 	tmp := tmpDir(DataHome)
 	must(extractTar(reader, tmp))
-	must(os.Rename(filepath.Join(DataHome, "cli"), filepath.Join(tmpDir(DataHome), "heroku")))
 	must(os.Rename(filepath.Join(tmp, "heroku"), filepath.Join(DataHome, "cli")))
 	log.Println("done")
 }
