@@ -131,13 +131,23 @@ func update() {
 	must(os.Rename(filepath.Join(tmp, "heroku"), filepath.Join(DataHome, "cli")))
 	os.Stderr.WriteString(" done\n")
 
-	copyconfig()
+	os.MkdirAll(filepath.Join(configHome()), 0755)
+	copyfile(filepath.Join(legacyhome(), "config.json"), filepath.Join(configHome(), "config.json"))
 	copyplugins()
 }
 
-func copyconfig() {
-	os.MkdirAll(filepath.Join(configHome()), 0755)
-	os.Rename(filepath.Join(legacyhome(), "config.json"), filepath.Join(configHome(), "config.json"))
+func copyfile(src, dst string) {
+	in, err := os.Open(src)
+	if err != nil {
+		return
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return
+	}
+	defer out.Close()
+	io.Copy(out, in)
 }
 
 var coreplugins = []string{
