@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -117,11 +115,8 @@ func update() {
 	log.Println("Updating CLI...")
 	manifest := getUpdateManifest("dev")
 	build := manifest.Builds[runtime.GOOS+"-"+runtime.GOARCH]
-	reader, getSha, err := downloadXZ(build.URL)
+	reader, err := downloadXZ(build.URL)
 	must(err)
-	if getSha() != build.Sha256 {
-		panic(fmt.Errorf("SHA mismatch"))
-	}
 	tmp := tmpDir(DataHome)
 	must(extractTar(reader, tmp))
 	must(os.Rename(filepath.Join(tmp, "heroku"), filepath.Join(DataHome, "cli")))
@@ -145,18 +140,17 @@ func getUpdateManifest(channel string) *Manifest {
 	return &m
 }
 
-func downloadXZ(url string) (io.Reader, func() string, error) {
+func downloadXZ(url string) (io.Reader, error) {
 	req := goreq.Request{Uri: url, Timeout: 30 * time.Minute}
 	resp, err := req.Do()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if err := getHTTPError(resp); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	getSha, reader := computeSha(resp.Body)
-	uncompressed, err := xz.NewReader(reader)
-	return uncompressed, getSha, err
+	uncompressed, err := xz.NewReader(resp.Body)
+	return uncompressed, err
 }
 
 func getHTTPError(resp *goreq.Response) error {
@@ -166,16 +160,6 @@ func getHTTPError(resp *goreq.Response) error {
 	var body string
 	body = resp.Header.Get("Content-Type")
 	return fmt.Errorf("%s: %s", resp.Status, body)
-}
-
-func computeSha(reader io.Reader) (func() string, io.Reader) {
-	hasher := sha256.New()
-	tee := io.TeeReader(reader, hasher)
-	getSha := func() string {
-		ioutil.ReadAll(tee)
-		return hex.EncodeToString(hasher.Sum(nil))
-	}
-	return getSha, tee
 }
 
 func tmpDir(base string) string {
