@@ -84,7 +84,7 @@ func loadNewCLI() {
 		return
 	}
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command(newCLIPath(), os.Args...)
+		cmd := exec.Command(newCLIPath(), os.Args[1:]...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
