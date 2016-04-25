@@ -18,8 +18,8 @@ TARGETS = [
 ]
 
 VERSION = `./version`.chomp
-CHANNEL = 'dev'
-p "CHANNEL: #{CHANNEL}"
+CHANNEL = ENV['CHANNEL']
+raise "no CHANNEL set" unless CHANNEL
 CLOUDFRONT_HOST = 'cli-assets.heroku.com'
 LABEL = "heroku-cli/#{VERSION} (#{CHANNEL})"
 REVISION=`git log -n 1 --pretty=format:"%H"`
@@ -54,7 +54,7 @@ end
 
 def build(target)
   path = "./dist/#{target[:os]}/#{target[:arch]}/heroku-cli"
-  ldflags = "-X=main.Version=#{VERSION} -X=main.Channel=#{CHANNEL} -X=main.GitSHA=#{REVISION}"
+  ldflags = "-X=main.Version=#{VERSION} -X=main.Channel=#{CHANNEL} -X=main.GitSHA=#{REVISION} -X=main.Channel=#{CHANNEL}"
   args = ["-o", "#{path}", "-ldflags", "\"#{ldflags}\""]
   vars = ["GOOS=#{target[:os]}", "GOARCH=#{target[:arch]}"]
   vars << "GO386=#{target[:go386]}" if target[:go386]

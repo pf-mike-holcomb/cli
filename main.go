@@ -18,6 +18,8 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
+var Channel string
+
 type Manifest struct {
 	ReleasedAt string            `json:"released_at"`
 	Version    string            `json:"version"`
@@ -124,7 +126,7 @@ func getExitCode(err error) int {
 
 func update() {
 	os.Stderr.WriteString("heroku-cli: Updating CLI...")
-	manifest := getUpdateManifest("stable")
+	manifest := getUpdateManifest(Channel)
 	os.Stderr.WriteString(fmt.Sprintf("\rheroku-cli: Updating to %s...", manifest.Version))
 	build := manifest.Builds[runtime.GOOS+"-"+runtime.GOARCH]
 	reader, err := downloadXZ(build.URL)
