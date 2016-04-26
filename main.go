@@ -18,7 +18,7 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
-var Channel string
+var Channel = "dev"
 
 type Manifest struct {
 	ReleasedAt string            `json:"released_at"`
