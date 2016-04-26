@@ -179,6 +179,15 @@ func include(arr []string, i string) bool {
 }
 
 func copyplugins() {
+	symlinked := func(name string) bool {
+		path := filepath.Join(legacyhome(), "node_modules", name)
+		fi, err := os.Lstat(path)
+		if err != nil {
+			return true
+		}
+		return fi.Mode()&os.ModeSymlink != 0
+
+	}
 	plugins, err := readJSON(filepath.Join(legacyhome(), "plugin-cache.json"))
 	if err != nil {
 		log.Println(err)
@@ -186,7 +195,7 @@ func copyplugins() {
 	}
 	tocopy := []string{}
 	for name, plugin := range plugins {
-		if include(coreplugins, name) {
+		if include(coreplugins, name) || symlinked(name) {
 			continue
 		}
 		commands, ok := plugin.(map[string]interface{})["commands"].([]interface{})
