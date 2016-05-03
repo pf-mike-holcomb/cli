@@ -246,6 +246,9 @@ func must(err error) {
 }
 
 func getUpdateManifest(channel string) *Manifest {
+	if channel == "master" {
+		channel = "stable"
+	}
 	res, err := goreq.Request{
 		Uri:     "https://cli-assets.heroku.com/branches/" + channel + "/manifest.json",
 		Timeout: 30 * time.Minute,
