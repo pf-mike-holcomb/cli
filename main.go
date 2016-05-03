@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dickeyxxx/golock"
 	"github.com/franela/goreq"
 	"github.com/ulikunitz/xz"
 )
@@ -125,6 +126,18 @@ func getExitCode(err error) int {
 }
 
 func update() {
+	lockpath := filepath.Join(DataHome, "tmp", "updating")
+	if locked, err := golock.IsLocked(lockpath); locked || err != nil {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		} else {
+			fmt.Fprintln(os.Stderr, "update in progress")
+			return
+		}
+	}
+	if err := golock.Lock(lockpath); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 	os.Stderr.WriteString("heroku-cli: Updating CLI...")
 	manifest := getUpdateManifest(Channel)
 	os.Stderr.WriteString(fmt.Sprintf("\rheroku-cli: Updating to %s...", manifest.Version))

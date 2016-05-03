@@ -4,6 +4,11 @@
 	"GodepVersion": "v62",
 	"Deps": [
 		{
+			"ImportPath": "github.com/dickeyxxx/golock",
+			"Comment": "v1.1.0-1-g89803bb",
+			"Rev": "89803bb54d765a1d363bcca9a3017fb5e5dc1142"
+		},
+		{
 			"ImportPath": "github.com/franela/goreq",
 			"Rev": "3ddeded65be21dacb5a2e2d0b95af9ff6862a2b5"
 		},
