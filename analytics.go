@@ -9,11 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dghubble/sling"
 	"github.com/dickeyxxx/golock"
 )
 
-var analyticsPath = filepath.Join(CacheHome, "analytics.json")
+var analyticsPath = filepath.Join(HomeDir, ".heroku", "analytics.json")
 var currentAnalyticsCommand = &AnalyticsCommand{
 	Timestamp:  time.Now().Unix(),
 	Version:    version(),
@@ -48,10 +47,10 @@ func (c *AnalyticsCommand) RecordStart() {
 // RecordEnd marks when a command was completed
 // and records it to the analytics file
 func (c *AnalyticsCommand) RecordEnd(status int) {
-	if c == nil || skipAnalytics() || len(Args) < 2 || (c.Valid && c.start.IsZero()) {
+	if c == nil || skipAnalytics() || len(os.Args) < 2 {
 		return
 	}
-	c.Command = Args[1]
+	c.Command = os.Args[1]
 	c.Status = status
 	if !c.start.IsZero() {
 		c.Runtime = (time.Now().UnixNano() - c.start.UnixNano()) / 1000000
@@ -64,12 +63,9 @@ func (c *AnalyticsCommand) RecordEnd(status int) {
 func readAnalyticsFile() (commands []AnalyticsCommand) {
 	f, err := os.Open(analyticsPath)
 	if err != nil {
-		LogIfError(err)
 		return
 	}
-	if err := json.NewDecoder(f).Decode(&commands); err != nil {
-		LogIfError(err)
-	}
+	json.NewDecoder(f).Decode(&commands)
 	return commands
 }
 
@@ -83,55 +79,66 @@ func writeAnalyticsFile(commands []AnalyticsCommand) error {
 
 // SubmitAnalytics sends the analytics info to the analytics service
 func SubmitAnalytics() {
-	if skipAnalytics() {
-		return
-	}
-	commands := readAnalyticsFile()
-	if len(commands) < 10 {
-		// do not record if less than 10 commands
-		return
-	}
-	lockfile := filepath.Join(CacheHome, "analytics.lock")
-	if locked, _ := golock.IsLocked(lockfile); locked {
-		// skip if already updating
-		return
-	}
-	golock.Lock(lockfile)
-	defer golock.Unlock(lockfile)
-	plugins := func() map[string]string {
-		plugins := make(map[string]string)
-		for _, plugin := range CorePlugins.Plugins() {
-			plugins[plugin.Name] = plugin.Version
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if skipAnalytics() {
+			return
 		}
-		for _, plugin := range UserPlugins.Plugins() {
-			plugins[plugin.Name] = plugin.Version
+		commands := readAnalyticsFile()
+		if len(commands) < 10 {
+			// do not record if less than 10 commands
+			return
 		}
-		dirs, _ := ioutil.ReadDir(filepath.Join(HomeDir, ".heroku", "plugins"))
-		for _, dir := range dirs {
-			plugins[dir.Name()] = "ruby"
+		lockfile := filepath.Join(AppDir(), "analytics.lock")
+		if locked, _ := golock.IsLocked(lockfile); locked {
+			// skip if already updating
+			return
 		}
-		return plugins
-	}
+		golock.Lock(lockfile)
+		defer golock.Unlock(lockfile)
+		plugins := func() map[string]string {
+			plugins := make(map[string]string)
+			for _, plugin := range GetPlugins() {
+				plugins[plugin.Name] = plugin.Version
+			}
+			dirs, _ := ioutil.ReadDir(filepath.Join(HomeDir, ".heroku", "plugins"))
+			for _, dir := range dirs {
+				plugins[dir.Name()] = "ruby"
+			}
+			return plugins
+		}
 
-	host := os.Getenv("HEROKU_ANALYTICS_HOST")
-	if host == "" {
-		host = "https://cli-analytics.heroku.com"
-	}
-	body := struct {
-		Version  string             `json:"version"`
-		Commands []AnalyticsCommand `json:"commands"`
-		User     string             `json:"user"`
-		Plugins  map[string]string  `json:"plugins"`
-	}{version(), commands, netrcLogin(), plugins()}
-	resp, err := sling.New().Base(host).Post("/record").BodyJSON(body).ReceiveSuccess(nil)
-	if err != nil {
-		LogIfError(err)
-		return
-	}
-	LogIfError(getHTTPError(resp))
-	os.Truncate(analyticsPath, 0)
+		req := apiRequestBase("")
+		host := os.Getenv("HEROKU_ANALYTICS_HOST")
+		if host == "" {
+			host = "https://cli-analytics.heroku.com"
+		}
+		req.Uri = host + "/record"
+		req.Method = "POST"
+		req.Body = struct {
+			Version  string             `json:"version"`
+			Commands []AnalyticsCommand `json:"commands"`
+			User     string             `json:"user"`
+			Plugins  map[string]string  `json:"plugins"`
+		}{version(), commands, netrcLogin(), plugins()}
+		resp, err := req.Do()
+		if err != nil {
+			LogIfError(err)
+			return
+		}
+		if resp.StatusCode != 201 {
+			Logln("analytics: HTTP " + resp.Status)
+		}
+		os.Truncate(analyticsPath, 0)
+	}()
 }
 
 func skipAnalytics() bool {
-	return os.Getenv("TESTING") == ONE || (config.SkipAnalytics != nil && *config.SkipAnalytics) || netrcLogin() == ""
+	skip, err := config.GetBool("skip_analytics")
+	if err != nil {
+		Logln(err)
+		return true
+	}
+	return skip || netrcLogin() == ""
 }

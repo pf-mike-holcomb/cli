@@ -4,48 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 )
-
-func init() {
-	Topics = append(Topics, TopicSet{
-		{
-			Name:        "commands",
-			Description: "list all commands",
-			Hidden:      true,
-			Commands: CommandSet{
-				{
-					Topic:            "commands",
-					Description:      "list all commands",
-					Flags:            []Flag{{Name: "json"}},
-					DisableAnalytics: true,
-					Run: func(ctx *Context) {
-						commands := AllCommands().Sort()
-						if ctx.Flags["json"] == true {
-							commands.loadUsages()
-							commands.loadFullHelp()
-							doc := map[string]interface{}{"topics": Topics, "commands": commands}
-							s, _ := json.Marshal(doc)
-							Println(string(s))
-							return
-						}
-						for _, command := range commands {
-							if command.Hidden {
-								continue
-							}
-							if command.Command == "" {
-								Printf("%s\n", command.Topic)
-							} else {
-								Printf("%s:%s\n", command.Topic, command.Command)
-							}
-						}
-					},
-				},
-			},
-		},
-	}...)
-}
 
 // Command represents a CLI command.
 // For example, in the command `heroku apps:create` the command would be `create`.
@@ -72,15 +32,14 @@ type Command struct {
 	Run              func(ctx *Context) `json:"-"`
 }
 
-func (c Command) String() string {
+func (c *Command) String() string {
 	if c.Command == "" {
 		return c.Topic
 	}
 	return c.Topic + ":" + c.Command
 }
 
-// CommandUsage generates the usage for a command
-func CommandUsage(c *Command) string {
+func commandUsage(c *Command) string {
 	if c.Usage != "" {
 		return c.Usage
 	}
@@ -90,10 +49,10 @@ func CommandUsage(c *Command) string {
 func (c *Command) buildFlagHelp() string {
 	flags := c.Flags
 	if c.NeedsApp || c.WantsApp {
-		flags = append(flags, *AppFlag, *RemoteFlag)
+		flags = append(flags, *appFlag, *remoteFlag)
 	}
 	if c.NeedsOrg || c.WantsOrg {
-		flags = append(flags, *OrgFlag)
+		flags = append(flags, *orgFlag)
 	}
 	lines := make([]string, 0, len(flags))
 	for _, flag := range flags {
@@ -135,7 +94,7 @@ This command does not take any flags.
 
 See more information with %s`,
 			red(flag),
-			cyan("heroku "+CommandUsage(c)),
+			cyan("heroku "+commandUsage(c)),
 			cyan(cmd+" --help"),
 		)
 	}
@@ -148,7 +107,7 @@ This flag is invalid for this command. Here are the accepted flags:
 
 See more information with %s`,
 		red(flag),
-		cyan("heroku "+CommandUsage(c)),
+		cyan("heroku "+commandUsage(c)),
 		flagHelp,
 		cyan(cmd+" --help"),
 	)
@@ -162,7 +121,7 @@ We don't know which app to run this on.
 Run this command from inside an app folder or specify which app to use with %s
 
 https://devcenter.heroku.com/articles/using-the-cli#app-commands`,
-		cyan("heroku "+CommandUsage(c)+" --app APP"),
+		cyan("heroku "+commandUsage(c)+" --app APP"),
 		cyan("--app APP"),
 	)
 }
@@ -177,7 +136,7 @@ You gave this command too many arguments. Try the command again without these ex
 See more information with %s`,
 		plural("argument", len(args)),
 		red(strings.Join(args, " ")),
-		cyan("heroku "+CommandUsage(c)),
+		cyan("heroku "+commandUsage(c)),
 		cyan(cmd+" --help"),
 	)
 }
@@ -185,17 +144,13 @@ See more information with %s`,
 // CommandSet is a slice of Command structs with some helper methods.
 type CommandSet []*Command
 
-// Find finds a command and topic matching the cmd string
-func (commands CommandSet) Find(cmd string) *Command {
-	var topic, command string
-	tc := strings.SplitN(cmd, ":", 2)
-	topic = tc[0]
-	if len(tc) > 1 {
-		command = tc[1]
-	}
+// ByTopicAndCommand returns a command that matches the passed topic and command.
+func (commands CommandSet) ByTopicAndCommand(topic, command string) *Command {
 	for _, c := range commands {
-		if c.Topic == topic && (c.Command == command || c.Default && command == "") {
-			return c
+		if c.Topic == topic {
+			if c.Command == command || c.Default && command == "" {
+				return c
+			}
 		}
 	}
 	return nil
@@ -203,7 +158,7 @@ func (commands CommandSet) Find(cmd string) *Command {
 
 func (commands CommandSet) loadUsages() {
 	for _, c := range commands {
-		c.Usage = CommandUsage(c)
+		c.Usage = commandUsage(c)
 	}
 }
 
@@ -220,31 +175,11 @@ func (commands CommandSet) Len() int {
 }
 
 func (commands CommandSet) Less(i, j int) bool {
-	if commands[i].Topic == commands[j].Topic {
-		return commands[i].Command < commands[j].Command
-	}
-	return commands[i].Topic < commands[j].Topic
+	return commands[i].Command < commands[j].Command
 }
 
 func (commands CommandSet) Swap(i, j int) {
 	commands[i], commands[j] = commands[j], commands[i]
-}
-
-// NonHidden returns the commands that are not hidden
-func (commands CommandSet) NonHidden() []*Command {
-	to := make([]*Command, 0, len(commands))
-	for _, command := range commands {
-		if !command.Hidden {
-			to = append(to, command)
-		}
-	}
-	return to
-}
-
-// Sort sorts
-func (commands CommandSet) Sort() CommandSet {
-	sort.Sort(commands)
-	return commands
 }
 
 // Arg defines an argument for a command.
@@ -277,10 +212,37 @@ func argsString(args []Arg) string {
 	return buffer.String()
 }
 
-// AllCommands gets all go/core/user commands
-func AllCommands() CommandSet {
-	commands := Topics.Commands()
-	commands = append(commands, CorePlugins.Commands()...)
-	commands = append(commands, UserPlugins.Commands()...)
-	return commands
+var commandsTopic = &Topic{
+	Name:        "commands",
+	Description: "list all commands",
+	Hidden:      true,
+}
+
+var commandsListCmd = &Command{
+	Topic:            "commands",
+	Description:      "list all commands",
+	Flags:            []Flag{{Name: "json"}},
+	DisableAnalytics: true,
+	Run: func(ctx *Context) {
+		SetupBuiltinPlugins()
+		cli.LoadPlugins(GetPlugins())
+		if ctx.Flags["json"] == true {
+			cli.Commands.loadUsages()
+			cli.Commands.loadFullHelp()
+			doc := map[string]interface{}{"topics": cli.Topics, "commands": cli.Commands}
+			s, _ := json.Marshal(doc)
+			Println(string(s))
+			return
+		}
+		for _, command := range cli.Commands {
+			if command.Hidden {
+				continue
+			}
+			if command.Command == "" {
+				Printf("%s\n", command.Topic)
+			} else {
+				Printf("%s:%s\n", command.Topic, command.Command)
+			}
+		}
+	},
 }
