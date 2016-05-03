@@ -133,8 +133,11 @@ func update() {
 	must(err)
 	tmp := tmpDir(DataHome)
 	must(extractTar(reader, tmp))
-	os.RemoveAll(filepath.Join(DataHome, "cli"))
+	tmp2 := tmpDir(DataHome)
+	os.Rename(filepath.Join(DataHome, "cli"), filepath.Join(tmp2, "cli"))
 	must(os.Rename(filepath.Join(tmp, "heroku"), filepath.Join(DataHome, "cli")))
+	os.Remove(tmp)
+	os.Remove(tmp2)
 	os.Stderr.WriteString(" done\n")
 
 	os.MkdirAll(filepath.Join(configHome()), 0755)
