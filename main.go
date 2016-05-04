@@ -41,6 +41,7 @@ func init() {
 }
 
 func main() {
+	runtime.GOMAXPROCS(1)
 	loadNewCLI()
 	update()
 	loadNewCLI()
