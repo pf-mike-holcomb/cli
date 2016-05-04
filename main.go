@@ -132,6 +132,7 @@ func update() {
 			fmt.Fprintln(os.Stderr, err)
 		} else {
 			fmt.Fprintln(os.Stderr, "update in progress")
+			golock.Lock(lockpath)
 			return
 		}
 	}
