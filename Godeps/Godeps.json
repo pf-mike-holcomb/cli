@@ -5,8 +5,8 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/dickeyxxx/golock",
-			"Comment": "v1.1.0-1-g89803bb",
-			"Rev": "89803bb54d765a1d363bcca9a3017fb5e5dc1142"
+			"Comment": "v1.1.1",
+			"Rev": "f8983b9df963bdbe77b31e684a71cd815d21f59e"
 		},
 		{
 			"ImportPath": "github.com/franela/goreq",
