@@ -99,9 +99,6 @@ func SubmitAnalytics() {
 	commands = readAnalyticsFile() // read commands again in case it was locked
 	plugins := func() map[string]string {
 		plugins := make(map[string]string)
-		for _, plugin := range CorePlugins.Plugins() {
-			plugins[plugin.Name] = plugin.Version
-		}
 		for _, plugin := range UserPlugins.Plugins() {
 			plugins[plugin.Name] = plugin.Version
 		}
