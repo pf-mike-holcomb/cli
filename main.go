@@ -96,6 +96,7 @@ func loadNewCLI() {
 		os.Exit(getExitCode(err))
 	} else {
 		if err := syscall.Exec(newCLIPath(), os.Args, os.Environ()); err != nil {
+			fmt.Fprintf(os.Stderr, "Error running: %+v with %+v\n", newCLIPath(), os.Args)
 			panic(err)
 		}
 	}
