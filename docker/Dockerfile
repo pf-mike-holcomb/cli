@@ -1,6 +1,11 @@
 FROM ubuntu:14.04
 
-RUN apt-get update && apt-get upgrade -y && \
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && \
+  apt-get install software-properties-common python-software-properties && \
+  add-apt-repository ppa:ubuntu-lxc/lxd-stable && \
+  apt-get update && \
+  apt-get upgrade -y && \
   apt-get -y install \
   autoconf \
   automake \
@@ -8,6 +13,7 @@ RUN apt-get update && apt-get upgrade -y && \
   cowsay \
   curl \
   git \
+  golang \
   jq \
   libcurl4-openssl-dev \
   libssl-dev \
@@ -15,17 +21,9 @@ RUN apt-get update && apt-get upgrade -y && \
   openssl \
   python-pip \
   python-dev \
-  && rm -rf /var/lib/apt/lists/*
-
-# install go
-ENV HOME=/root \
-    GOLANG_VERSION=1.6.2 \
-    GOLANG_DOWNLOAD_URL=https://golang.org/dl/go1.6.2.linux-amd64.tar.gz \
-    GOLANG_DOWNLOAD_SHA256=e40c36ae71756198478624ed1bb4ce17597b3c19d243f3f0899bb5740d56212a
-RUN curl -fsSL "$GOLANG_DOWNLOAD_URL" -o golang.tar.gz \
-  && echo "$GOLANG_DOWNLOAD_SHA256  golang.tar.gz" | sha256sum -c - \
-  && tar -C /usr/local -xzf golang.tar.gz \
-  && rm golang.tar.gz
+  gnupg pbuilder ubuntu-dev-tools bzr-builddeb apt-file \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # osslsigncode
 RUN curl -fsSLo osslsigncode-1.7.1.tar.gz https://cli-assets.heroku.com/osslsigncode-1.7.1.tar.gz && \

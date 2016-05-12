@@ -5,8 +5,8 @@ NODE_VERSION=6.1.0
 
 DIST_DIR?=dist
 CACHE_DIR?=tmp/cache
-VERSION=$(shell ./bin/version)
-REVISION=$(shell git log -n 1 --pretty=format:"%H")
+VERSION?=$(shell ./bin/version)
+REVISION?=$(shell git log -n 1 --pretty=format:"%H")
 
 ifeq (,$(findstring working directory clean,$(shell git status 2> /dev/null | tail -n1)))
 	DIRTY=-dirty
@@ -42,6 +42,7 @@ NPM_ARCHIVE=$(CACHE_DIR)/npm-v$(NPM_VERSION).tar.gz
 $(NPM_ARCHIVE):
 	@mkdir -p $(@D)
 	curl -fsSLo $@ https://github.com/npm/npm/archive/v$(NPM_VERSION).tar.gz
+
 %/heroku/lib/npm: $(NPM_ARCHIVE)
 	@mkdir -p $(@D)
 	tar -C $(@D) -xzf $(NPM_ARCHIVE)
@@ -53,8 +54,8 @@ $(WORKSPACE)/lib/plugins.json: package.json $(WORKSPACE)/lib/npm $(WORKSPACE)/li
 	cp package.json $(@D)/package.json
 	$(WORKSPACE)/bin/heroku build:plugins
 	@ # this doesn't work in the CLI for some reason
-	cd $(WORKSPACE)/lib && ./npm/cli.js dedupe > /dev/null
-	cd $(WORKSPACE)/lib && ./npm/cli.js prune > /dev/null
+	cd $(WORKSPACE)/lib && PATH=. ./npm/cli.js dedupe > /dev/null
+	cd $(WORKSPACE)/lib && PATH=. ./npm/cli.js prune > /dev/null
 
 tmp/%/heroku/lib/plugins.json: $(WORKSPACE)/lib/plugins.json
 	@mkdir -p $(@D)
@@ -134,7 +135,7 @@ $(MANIFEST_GZ).sig: $(MANIFEST_GZ)
 	@gpg --armor -u 0F1B0520 --yes --output $@ --detach-sig $<
 
 ifneq ($(CHANNEL),)
-PREVIOUS_VERSION:=$(shell curl -fsSL https://cli-assets.heroku.com/branches/$(CHANNEL)/manifest.json | jq -r '.version')
+	PREVIOUS_VERSION:=$(shell curl -fsSL https://cli-assets.heroku.com/branches/$(CHANNEL)/manifest.json | jq -r '.version')
 endif
 DIST_PATCHES := $(foreach t,$(TARGETS),$(DIST_DIR)/$(PREVIOUS_VERSION)/heroku-v$(PREVIOUS_VERSION)-$(t).patch)
 
@@ -149,7 +150,7 @@ $(DIST_DIR)/$(VERSION)/apt/$(DEB_BASE)_%.deb: tmp/debian-%
 	@mkdir -p tmp/$(DEB_BASE)_$*.apt/usr/bin
 	@mkdir -p tmp/$(DEB_BASE)_$*.apt/usr/lib
 	sed -e "s/Architecture: ARCHITECTURE/Architecture: $(if $(filter amd64,$*),amd64,$(if $(filter 386,$*),i386,armel))/" resources/deb/control | \
-	  sed -e "s/Version: VERSION/Version: $(DEB_VERSION)/" \
+	sed -e "s/Version: VERSION/Version: $(DEB_VERSION)/" \
 		> tmp/$(DEB_BASE)_$*.apt/DEBIAN/control
 	cp -r tmp/debian-$*/heroku tmp/$(DEB_BASE)_$*.apt/usr/lib/
 	ln -s ../lib/heroku/bin/heroku tmp/$(DEB_BASE)_$*.apt/usr/bin/heroku
@@ -192,11 +193,13 @@ $(DIST_DIR)/$(VERSION)/heroku-osx.pkg: tmp/darwin-amd64/heroku/VERSION
 .PHONY: build
 build: $(WORKSPACE)/bin/heroku $(WORKSPACE)/lib/npm $(WORKSPACE)/lib/node $(WORKSPACE)/lib/plugins.json $(WORKSPACE)/lib/cacert.pem
 
+DESTDIR?=
 .PHONY: install
 install: build
-	cp -r $(WORKSPACE) /usr/local/lib/heroku
-	rm /usr/local/bin/heroku
-	ln -s /usr/local/lib/heroku/bin/heroku /usr/local/bin/heroku
+	@mkdir -p $(DESTDIR)/usr/lib $(DESTDIR)/usr/bin
+	@rm -rf $(DESTDIR)/usr/lib/heroku $(DESTDIR)/usr/bin/heroku
+	cp -r $(WORKSPACE) $(DESTDIR)/usr/lib/heroku
+	ln -s $(DESTDIR)/usr/lib/heroku/bin/heroku $(DESTDIR)/usr/bin/heroku
 
 .PHONY: clean
 clean:
@@ -212,9 +215,9 @@ test: build
 all: darwin linux windows freebsd openbsd
 
 TARGET_DEPS =  tmp/$$(OS)-$$(ARCH)/heroku/bin/heroku$$(EXT) \
-						   tmp/$$(OS)-$$(ARCH)/heroku/lib/npm           \
-						   tmp/$$(OS)-$$(ARCH)/heroku/lib/plugins.json  \
-						   tmp/$$(OS)-$$(ARCH)/heroku/lib/cacert.pem
+							 tmp/$$(OS)-$$(ARCH)/heroku/lib/npm           \
+							 tmp/$$(OS)-$$(ARCH)/heroku/lib/plugins.json  \
+							 tmp/$$(OS)-$$(ARCH)/heroku/lib/cacert.pem
 
 STANDALONE_FILES = tmp/$$(OS)-$$(ARCH)/heroku/README  \
 									 tmp/$$(OS)-$$(ARCH)/heroku/install
@@ -293,6 +296,7 @@ releasetgz: $(MANIFEST_GZ) $(MANIFEST_GZ).sig $(addprefix releasetgz/,$(DIST_TAR
 .PHONY: releasetxz/% releasetgz/%
 releasetxz/%.tar.xz: %.tar.xz
 	aws s3 cp --cache-control max-age=86400 $< s3://heroku-cli-assets/branches/$(CHANNEL)/$(VERSION)/$(notdir $<)
+
 releasetgz/%.tar.gz: %.tar.gz
 	aws s3 cp --cache-control max-age=86400 $< s3://heroku-cli-assets/branches/$(CHANNEL)/$(VERSION)/$(notdir $<)
 
@@ -326,11 +330,11 @@ releasewin: $(DIST_DIR)/$(VERSION)/heroku-windows-amd64.exe $(DIST_DIR)/$(VERSIO
 	aws s3 cp --cache-control max-age=3600 $(DIST_DIR)/$(VERSION)/heroku-windows-386.exe s3://heroku-cli-assets/branches/$(CHANNEL)/heroku-windows-386.exe
 
 NODES = node-v$(NODE_VERSION)-darwin-x64.tar.gz \
-node-v$(NODE_VERSION)-linux-x64.tar.gz \
-node-v$(NODE_VERSION)-linux-x86.tar.gz \
-node-v$(NODE_VERSION)-linux-armv6l.tar.gz \
-win-x64/node.exe \
-win-x86/node.exe
+				node-v$(NODE_VERSION)-linux-x64.tar.gz \
+				node-v$(NODE_VERSION)-linux-x86.tar.gz \
+				node-v$(NODE_VERSION)-linux-armv6l.tar.gz \
+				win-x64/node.exe \
+				win-x86/node.exe
 
 NODE_TARGETS := $(foreach node, $(NODES), $(CACHE_DIR)/node-v$(NODE_VERSION)/$(node))
 .PHONY: deps
