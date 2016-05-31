@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/dickeyxxx/netrc"
@@ -276,16 +278,19 @@ func saveOauthToken(email, token string) {
 
 func getString(prompt string) string {
 	var s string
-	Err(prompt)
-	if _, err := fmt.Scanln(&s); err != nil {
-		if err.Error() == "unexpected newline" {
-			return getString(prompt)
+	var err error
+
+	reader := bufio.NewReader(os.Stdin)
+	for s == "" {
+		Err(prompt)
+		if s, err = reader.ReadString('\n'); err != nil {
+			if err.Error() == "EOF" {
+				Errln()
+				Exit(1)
+			}
+			must(err)
 		}
-		if err.Error() == "EOF" {
-			Errln()
-			Exit(1)
-		}
-		must(err)
+		s = strings.TrimSpace(s)
 	}
 	return s
 }
