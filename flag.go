@@ -14,7 +14,8 @@ type Flag struct {
 	Description string `json:"description"`
 	HasValue    bool   `json:"hasValue"`
 	Hidden      bool   `json:"hidden"`
-	Required    bool   `json:"required"`
+	Optional    *bool  `json:"required"`
+	Required    *bool  `json:"required"`
 }
 
 // AppFlag is --app
@@ -114,3 +115,9 @@ func (flags Flags) Sort() Flags {
 	sort.Sort(flags)
 	return flags
 }
+
+func getBoolPointer(b bool) *bool {
+	return &b
+}
+
+var truePointer = getBoolPointer(true)

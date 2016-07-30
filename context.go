@@ -148,7 +148,7 @@ func parseVarArgs(command *Command, args []string) (result []string, flags map[s
 		}
 	}
 	for _, flag := range command.Flags {
-		if flag.Required && flags[flag.Name] == nil {
+		if flag.IsRequired() && flags[flag.Name] == nil {
 			ExitWithMessage("Required flag: %s", flag.String())
 		}
 	}
