@@ -1,7 +1,7 @@
 {
   "name": "heroku-cli",
   "description": "Heroku CLI",
-  "private": true,
+  "version": "0.0.0",
   "dependencies": {
     "heroku-apps": "2.1.15",
     "heroku-cli-addons": "1.0.5",
